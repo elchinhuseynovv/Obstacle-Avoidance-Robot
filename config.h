@@ -1,4 +1,4 @@
-// Enhanced Configuration file for Advanced Obstacle Avoidance Robot
+// Enhanced Configuration file for Advanced Robot Control System
 #ifndef CONFIG_H
 #define CONFIG_H
 
@@ -75,6 +75,24 @@
 #define SPEED_UPDATE_MS 20   // Delay between speed updates
 #define DEBUG_UPDATE_MS 500  // Delay between debug messages
 #define SENSOR_TIMEOUT 30000 // Ultrasonic sensor timeout in microseconds
+
+// Emergency Stop Configuration
+#define EMERGENCY_STOP_PIN 18
+#define CALIBRATION_PIN 19
+
+// System Safety Thresholds
+#define MAX_SAFE_TEMPERATURE 60.0  // Celsius
+#define MAX_SAFE_ROLL 45.0        // Degrees
+#define MAX_SAFE_PITCH 45.0       // Degrees
+#define MINIMUM_BATTERY_VOLTAGE 6.8
+
+// Timing Parameters
+#define LOOP_TIME_US 5000         // 5ms loop time
+#define TELEMETRY_UPDATE_MS 1000  // 1 second between telemetry updates
+#define CALIBRATION_TIMEOUT 5000  // 5 seconds calibration timeout
+
+// Feature Flags
+//#define WIRELESS_ENABLED        // Uncomment to enable wireless telemetry
 
 // Navigation Modes
 enum NavigationMode {

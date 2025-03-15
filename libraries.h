@@ -13,10 +13,9 @@
 #include "display.h"
 #include "battery.h"
 #include "navigation.h"
-
-// Optional Libraries for Enhanced Features
-// Uncomment as needed:
-// #include <EEPROM.h> // For storing settings
-// #include <Servo.h> // For additional sensors
+#include "line_follower.h"
+#include "encoder.h"
+#include "imu.h"
+#include "pid_controller.h"
 
 #endif
