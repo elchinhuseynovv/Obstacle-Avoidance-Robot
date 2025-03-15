@@ -14,6 +14,19 @@
 #define TRIG 3
 #define ECHO 2
 
+// Line Follower Sensor Pins
+#define LINE_SENSOR_1 A1
+#define LINE_SENSOR_2 A2
+#define LINE_SENSOR_3 A3
+#define LINE_SENSOR_4 A4
+#define LINE_SENSOR_5 A5
+
+// Encoder Pins
+#define RIGHT_ENCODER_A 11
+#define RIGHT_ENCODER_B 12
+#define LEFT_ENCODER_A 13
+#define LEFT_ENCODER_B 4
+
 // Battery Monitoring
 #define BATTERY_PIN A0
 #define VOLTAGE_REFERENCE 5.0
@@ -40,6 +53,19 @@
 #define TURN_SPEED 180       // Speed during turns
 #define ACCELERATION 5       // Speed increment for smooth acceleration
 
+// Line Following PID Parameters
+#define LINE_KP 0.8         // Proportional gain
+#define LINE_KI 0.2         // Integral gain
+#define LINE_KD 0.1         // Derivative gain
+
+// Encoder Parameters
+#define WHEEL_DIAMETER 65.0  // mm
+#define PULSES_PER_REV 20   // Encoder pulses per revolution
+#define SPEED_CALC_INTERVAL 100 // ms
+
+// IMU Parameters
+#define IMU_UPDATE_INTERVAL 20 // ms
+
 // Debug Configuration
 #define DEBUG_MODE true      // Enable/disable debug messages
 #define SERIAL_BAUD 9600     // Serial communication baud rate
@@ -54,7 +80,8 @@
 enum NavigationMode {
     NORMAL,
     OBSTACLE_AVOIDANCE,
-    RECOVERY
+    RECOVERY,
+    LINE_FOLLOWING
 };
 
 #endif
