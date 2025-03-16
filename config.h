@@ -1,4 +1,3 @@
-// Enhanced Configuration file for Advanced Robot Control System
 #ifndef CONFIG_H
 #define CONFIG_H
 
@@ -38,6 +37,15 @@
 #define LOW_BATTERY_THRESHOLD 7.2
 #define CRITICAL_BATTERY_THRESHOLD 6.8
 #define BATTERY_CHECK_MS 5000
+
+// Power Management
+#define POWER_LED_PIN 20
+#define POWER_CHECK_INTERVAL 1000
+#define SLEEP_VOLTAGE_THRESHOLD 7.0
+
+// SD Card
+#define SD_CS_PIN 53
+#define LOG_INTERVAL 1000
 
 // LCD Display Configuration
 #define LCD_ADDRESS 0x27
@@ -86,6 +94,7 @@
 #define SPEED_UPDATE_MS 20   // Delay between speed updates
 #define DEBUG_UPDATE_MS 500  // Delay between debug messages
 #define SENSOR_TIMEOUT 30000 // Ultrasonic sensor timeout in microseconds
+#define LOOP_TIME_US 10000  // Main loop timing in microseconds
 
 // Emergency Stop Configuration
 #define EMERGENCY_STOP_PIN 18
@@ -109,11 +118,18 @@
 #define RECOVERY_ATTEMPTS 3        // Maximum recovery attempts before seeking help
 #define WALL_FOLLOW_DISTANCE 15    // Distance to maintain from wall in cm
 
+// Wireless Configuration
+#define WIFI_SSID "RobotNetwork"
+#define WIFI_PASSWORD "RobotPass123"
+#define TELEMETRY_UPDATE_MS 1000
+
 // Feature Flags
 #define ENABLE_WALL_FOLLOWING
 #define ENABLE_POSITION_TRACKING
 #define ENABLE_ADVANCED_NAVIGATION
-//#define WIRELESS_ENABLED
+#define ENABLE_WIRELESS
+#define ENABLE_SD_LOGGING
+#define ENABLE_POWER_MANAGEMENT
 
 // Navigation Modes
 enum NavigationMode {
@@ -135,7 +151,8 @@ enum RobotState {
     AVOIDING,
     CALIBRATING,
     ERROR_STATE,
-    EMERGENCY_STOP
+    EMERGENCY_STOP,
+    SLEEP_MODE
 };
 
 // Error Codes
@@ -147,7 +164,9 @@ enum ErrorCode {
     IMU_ERROR = 4,
     STUCK = 5,
     OVERHEATING = 6,
-    CALIBRATION_FAILED = 7
+    CALIBRATION_FAILED = 7,
+    WIRELESS_ERROR = 8,
+    SD_CARD_ERROR = 9
 };
 
 #endif
