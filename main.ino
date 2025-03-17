@@ -1,15 +1,8 @@
 // Advanced Autonomous Robot Control System
 #include "libraries.h"
 #include "config.h"
-#include "motors.h"
-#include "sensor.h"
-#include "display.h"
-#include "battery.h"
-#include "navigation.h"
-#include "line_follower.h"
-#include "encoder.h"
-#include "imu.h"
-#include "pid_controller.h"
+#include "system_monitor.h"
+#include "error_handler.h"
 
 // Object instances
 Motors motors;
@@ -21,6 +14,8 @@ LineFollower lineFollower(motors);
 IMU imu;
 Encoder rightEncoder(RIGHT_ENCODER_A, RIGHT_ENCODER_B, WHEEL_DIAMETER, PULSES_PER_REV);
 Encoder leftEncoder(LEFT_ENCODER_A, LEFT_ENCODER_B, WHEEL_DIAMETER, PULSES_PER_REV);
+SystemMonitor* systemMonitor;
+ErrorHandler* errorHandler;
 
 // System state variables
 bool systemError = false;
@@ -42,7 +37,7 @@ struct SystemMetrics {
     unsigned long lastBatteryCheck;
 } metrics;
 
-// Interrupt handlers for encoders
+// Interrupt handlers
 void rightEncoderISR() {
     rightEncoder.handleInterrupt();
 }
@@ -51,7 +46,6 @@ void leftEncoderISR() {
     leftEncoder.handleInterrupt();
 }
 
-// Emergency stop interrupt handler
 void emergencyStopISR() {
     emergencyStop = true;
     motors.stop();
@@ -68,10 +62,10 @@ void setup() {
     // Initialize system metrics
     initializeMetrics();
     
-    // Initialize components with error checking
+    // Initialize components
     if (!initializeComponents()) {
         systemError = true;
-        display.showError("Init Failed!");
+        errorHandler->handleError(CALIBRATION_FAILED, "Initialization Failed");
         return;
     }
     
@@ -79,9 +73,9 @@ void setup() {
     setupInterrupts();
     
     // Perform initial system checks
-    if (!performSystemChecks()) {
+    if (!systemMonitor->checkSystem()) {
         systemError = true;
-        display.showError("Check Failed!");
+        errorHandler->handleError(SENSOR_ERROR, "System Check Failed");
         return;
     }
     
@@ -106,17 +100,14 @@ void loop() {
         return;
     }
     
-    // Update IMU and process motion data
-    updateMotionControl();
-    
-    // Check battery and system health
-    if (!checkSystemHealth()) {
+    // Check system health
+    if (!systemMonitor->checkSystem()) {
+        handleSystemError();
         return;
     }
     
     // Main control loop
     if (!systemError) {
-        // Handle different operating modes
         if (calibrationMode) {
             handleCalibrationMode();
         } else {
@@ -133,7 +124,6 @@ void loop() {
 }
 
 bool initializeComponents() {
-    // Initialize with error checking
     bool success = true;
     
     success &= motors.init();
@@ -143,12 +133,12 @@ bool initializeComponents() {
     success &= lineFollower.init();
     success &= imu.init();
     
-    // Initialize encoders with error checking
     rightEncoder.init();
     leftEncoder.init();
     
-    // Create navigation controller
     navigation = new Navigation(motors, sensor);
+    systemMonitor = new SystemMonitor(battery, motors, imu);
+    errorHandler = new ErrorHandler(display);
     
     return success;
 }
@@ -163,23 +153,17 @@ void setupInterrupts() {
     attachInterrupt(digitalPinToInterrupt(EMERGENCY_STOP_PIN), emergencyStopISR, FALLING);
 }
 
-bool performSystemChecks() {
-    bool checksPass = true;
+void handleSystemError() {
+    motors.stop();
+    systemError = true;
+    String healthReport = systemMonitor->getHealthReport();
     
-    // Check battery voltage
-    float voltage = battery.getVoltage();
-    checksPass &= (voltage > MINIMUM_BATTERY_VOLTAGE);
+    if (DEBUG_MODE) {
+        Serial.println(F("System Error:"));
+        Serial.println(healthReport);
+    }
     
-    // Check sensors
-    checksPass &= (sensor.selfTest());
-    
-    // Check motor connections
-    checksPass &= (motors.selfTest());
-    
-    // Check IMU
-    checksPass &= (imu.selfTest());
-    
-    return checksPass;
+    display.showError("System Error");
 }
 
 void handleEmergencyStop() {
@@ -193,47 +177,6 @@ void handleEmergencyStop() {
         display.showError("EMERGENCY STOP");
         lastEmergencyMessage = millis();
     }
-}
-
-void updateMotionControl() {
-    // Update IMU data
-    imu.update();
-    
-    // Process motion data for enhanced control
-    float roll, pitch, yaw;
-    roll = imu.getRoll();
-    pitch = imu.getPitch();
-    yaw = imu.getYaw();
-    
-    // Adjust motor control based on orientation
-    if (abs(roll) > MAX_SAFE_ROLL || abs(pitch) > MAX_SAFE_PITCH) {
-        motors.stop();
-        systemError = true;
-        display.showError("Unsafe Angle!");
-    }
-}
-
-bool checkSystemHealth() {
-    // Check battery status
-    float batteryVoltage = battery.getVoltage();
-    if (battery.isLowBattery()) {
-        handleLowBattery();
-        return false;
-    }
-    
-    // Monitor temperature
-    if (imu.getTemperature() > MAX_SAFE_TEMPERATURE) {
-        handleOverheating();
-        return false;
-    }
-    
-    // Check for motor stalls
-    if (motors.isStalled()) {
-        handleMotorStall();
-        return false;
-    }
-    
-    return true;
 }
 
 void handleNormalOperation() {
@@ -367,36 +310,6 @@ void initializeMetrics() {
     metrics.batteryDrainRate = 0;
     metrics.lastBatteryVoltage = battery.getVoltage();
     metrics.lastBatteryCheck = millis();
-}
-
-void handleLowBattery() {
-    motors.stop();
-    display.showError("Low Battery!");
-    metrics.errorCount++;
-    if (DEBUG_MODE) {
-        Serial.println(F("ERROR: Low battery! Robot stopped."));
-    }
-    systemError = true;
-}
-
-void handleOverheating() {
-    motors.stop();
-    display.showError("Overheating!");
-    metrics.errorCount++;
-    if (DEBUG_MODE) {
-        Serial.println(F("ERROR: System overheating! Robot stopped."));
-    }
-    systemError = true;
-}
-
-void handleMotorStall() {
-    motors.stop();
-    display.showError("Motor Stall!");
-    metrics.errorCount++;
-    if (DEBUG_MODE) {
-        Serial.println(F("ERROR: Motor stall detected! Robot stopped."));
-    }
-    systemError = true;
 }
 
 void processSensorData() {
