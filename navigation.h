@@ -50,6 +50,16 @@ private:
     PIDController headingPID;
     PIDController distancePID;
     PIDController wallFollowPID;
+    
+    // Navigation metrics
+    struct NavigationMetrics {
+        float totalDistance;
+        float averageSpeed;
+        int obstacleCount;
+        unsigned long navigationTime;
+        float maxSpeed;
+        float energyEfficiency;
+    } metrics;
 
 public:
     Navigation(Motors& m, UltrasonicSensor& front, UltrasonicSensor& left, 
@@ -65,44 +75,64 @@ public:
         
         resetPosition();
         initializeNavigation();
+        resetMetrics();
     }
 
     void update() {
-        updatePosition();
-        updateSensorData();
-        
-        // Enhanced state machine
-        switch (currentMode) {
-            case NORMAL:
-                normalNavigation();
-                break;
-            case OBSTACLE_AVOIDANCE:
-                avoidObstacle();
-                break;
-            case WALL_FOLLOWING:
-                followWall();
-                break;
-            case RECOVERY:
-                performRecovery();
-                break;
-            case POSITION_TRACKING:
-                navigateToPosition();
-                break;
-            default:
-                handleError();
-                break;
+        if (currentState == ERROR_STATE) {
+            handleError();
+            return;
         }
-        
-        updatePathMemory();
-        updateMetrics();
+
+        try {
+            updatePosition();
+            updateSensorData();
+            
+            // Enhanced state machine with error handling
+            switch (currentMode) {
+                case NORMAL:
+                    normalNavigation();
+                    break;
+                case OBSTACLE_AVOIDANCE:
+                    avoidObstacle();
+                    break;
+                case WALL_FOLLOWING:
+                    followWall();
+                    break;
+                case RECOVERY:
+                    performRecovery();
+                    break;
+                case POSITION_TRACKING:
+                    navigateToPosition();
+                    break;
+                default:
+                    handleError();
+                    break;
+            }
+            
+            updatePathMemory();
+            updateMetrics();
+        } catch (...) {
+            handleError();
+        }
     }
 
     void setTarget(float x, float y) {
+        if (!isfinite(x) || !isfinite(y)) {
+            lastError = INVALID_TARGET;
+            handleError();
+            return;
+        }
+
         targetPosition.x = x;
         targetPosition.y = y;
         targetPosition.timestamp = millis();
         targetHeading = calculateTargetHeading();
         resetPIDControllers();
+        
+        // Reset navigation metrics for new target
+        metrics.navigationTime = 0;
+        metrics.obstacleCount = 0;
     }
 
     NavigationMode getMode() const { return currentMode; }
@@ -119,6 +149,7 @@ public:
         NavigationMode mode;
         bool isObstacleDetected;
         unsigned long navigationTime;
+        NavigationMetrics metrics;
     };
     
     NavigationStatus getStatus() const {
@@ -130,23 +161,28 @@ public:
         status.mode = currentMode;
         status.isObstacleDetected = isObstacleDetected();
         status.navigationTime = millis() - targetPosition.timestamp;
+        status.metrics = metrics;
         return status;
     }
 
 private:
     void initializeNavigation() {
-        // Initialize PID controllers
-        headingPID.reset();
-        distancePID.reset();
-        wallFollowPID.reset();
-        
-        // Initialize position tracking
-        resetPosition();
-        
-        // Set initial navigation parameters
-        linearSpeed = 0;
-        angularSpeed = 0;
-        isWallFollowing = false;
+        // Initialize PID controllers with error checking
+        try {
+            headingPID.reset();
+            distancePID.reset();
+            wallFollowPID.reset();
+            
+            // Initialize position tracking
+            resetPosition();
+            
+            // Set initial navigation parameters
+            linearSpeed = 0;
+            angularSpeed = 0;
+            isWallFollowing = false;
+        } catch (...) {
+            handleError();
+        }
     }
 
     void updatePosition() {
@@ -155,19 +191,41 @@ private:
         float deltaTime = (millis() - lastPositionUpdate) / 1000.0;
         if (deltaTime <= 0) return;
         
-        float distance = motors.getAverageDistance();
-        float heading = imu.getYaw();
-        
-        // Enhanced position calculation with velocity and acceleration
-        float currentVelocity = distance / deltaTime;
-        float acceleration = (currentVelocity - currentPosition.velocity) / deltaTime;
-        
-        currentPosition.x += distance * cos(heading * DEG_TO_RAD);
-        currentPosition.y += distance * sin(heading * DEG_TO_RAD);
-        currentPosition.heading = heading;
-        currentPosition.velocity = currentVelocity;
-        currentPosition.acceleration = acceleration;
-        currentPosition.timestamp = millis();
+        try {
+            float distance = motors.getAverageDistance();
+            float heading = imu.getYaw();
+            
+            if (!isfinite(distance) || !isfinite(heading)) {
+                throw std::runtime_error("Invalid sensor data");
+            }
+            
+            // Enhanced position calculation with velocity and acceleration
+            float currentVelocity = distance / deltaTime;
+            float acceleration = (currentVelocity - currentPosition.velocity) / deltaTime;
+            
+            // Update position with error checking
+            float newX = currentPosition.x + distance * cos(heading * DEG_TO_RAD);
+            float newY = currentPosition.y + distance * sin(heading * DEG_TO_RAD);
+            
+            if (isfinite(newX) && isfinite(newY)) {
+                currentPosition.x = newX;
+                currentPosition.y = newY;
+                currentPosition.heading = heading;
+                currentPosition.velocity = currentVelocity;
+                currentPosition.acceleration = acceleration;
+                currentPosition.timestamp = millis();
+                
+                // Update metrics
+                metrics.totalDistance += distance;
+                metrics.averageSpeed = (metrics.averageSpeed * 0.9) + (currentVelocity * 0.1);
+                metrics.maxSpeed = max(metrics.maxSpeed, currentVelocity);
+            } else {
+                throw std::runtime_error("Position calculation error");
+            }
+        } catch (...) {
+            handleError();
+            return;
+        }
         
         lastPositionUpdate = millis();
     }
@@ -456,19 +514,29 @@ private:
         pathMemoryIndex = (pathMemoryIndex + 1) % PATH_MEMORY_SIZE;
     }
 
+    void resetMetrics() {
+        metrics = {
+            .totalDistance = 0,
+            .averageSpeed = 0,
+            .obstacleCount = 0,
+            .navigationTime = 0,
+            .maxSpeed = 0,
+            .energyEfficiency = 100
+        };
+    }
+
     void updateMetrics() {
-        // Basic metrics tracking
         static unsigned long lastMetricsUpdate = 0;
         unsigned long now = millis();
         
         if (now - lastMetricsUpdate >= 1000) { // Update every second
-            // Update distance traveled
-            float distance = calculateDistanceToTarget();
+            metrics.navigationTime = now - targetPosition.timestamp;
             
-            // Update average speed
-            float avgSpeed = currentPosition.velocity;
+            // Calculate energy efficiency based on speed and obstacle avoidance
+            float speedEfficiency = metrics.averageSpeed / MAX_SPEED;
+            float obstacleEfficiency = 1.0 - (metrics.obstacleCount * 0.1);
+            metrics.energyEfficiency = (speedEfficiency + obstacleEfficiency) * 50;
             
-            // Could log or store these metrics as needed
             lastMetricsUpdate = now;
         }
     }
@@ -476,8 +544,20 @@ private:
     void handleError() {
         motors.stop();
         currentState = ERROR_STATE;
+        
         if (DEBUG_MODE) {
             Serial.println(F("Navigation error detected"));
+            Serial.print(F("Error code: "));
+            Serial.println(lastError);
+            Serial.print(F("Position: "));
+            Serial.print(currentPosition.x);
+            Serial.print(F(", "));
+            Serial.println(currentPosition.y);
+        }
+        
+        // Attempt recovery if possible
+        if (recoveryAttempts < RECOVERY_ATTEMPTS) {
+            currentMode = RECOVERY;
         }
     }
 };
