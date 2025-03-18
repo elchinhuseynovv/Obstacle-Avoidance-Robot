@@ -5,6 +5,8 @@
 #include "motors.h"
 #include "sensor.h"
 #include "imu.h"
+#include "pid_controller.h"
+#include <math.h>
 
 struct Position {
     float x;
@@ -99,7 +101,7 @@ public:
         targetPosition.x = x;
         targetPosition.y = y;
         targetPosition.timestamp = millis();
-        calculateTargetHeading();
+        targetHeading = calculateTargetHeading();
         resetPIDControllers();
     }
 
@@ -151,6 +153,8 @@ private:
         if (millis() - lastPositionUpdate < IMU_UPDATE_INTERVAL) return;
         
         float deltaTime = (millis() - lastPositionUpdate) / 1000.0;
+        if (deltaTime <= 0) return;
+        
         float distance = motors.getAverageDistance();
         float heading = imu.getYaw();
         
@@ -172,6 +176,12 @@ private:
         int frontDist = frontSensor.getDistance();
         int leftDist = leftSensor.getDistance();
         int rightDist = rightSensor.getDistance();
+        
+        // Validate sensor readings
+        if (frontDist < 0 || leftDist < 0 || rightDist < 0) {
+            handleError();
+            return;
+        }
         
         // Enhanced obstacle detection and mode selection
         if (frontDist < DANGER_DISTANCE) {
@@ -198,9 +208,9 @@ private:
         angularSpeed = smoothTransition(angularSpeed, headingCorrection, MAX_ANGULAR_SPEED/10);
         linearSpeed = smoothTransition(linearSpeed, speedCorrection, MAX_SPEED/10);
         
-        // Set motor speeds
-        float leftSpeed = linearSpeed - angularSpeed;
-        float rightSpeed = linearSpeed + angularSpeed;
+        // Set motor speeds with bounds checking
+        float leftSpeed = constrain(linearSpeed - angularSpeed, -MAX_SPEED, MAX_SPEED);
+        float rightSpeed = constrain(linearSpeed + angularSpeed, -MAX_SPEED, MAX_SPEED);
         
         motors.setSpeed(leftSpeed, rightSpeed);
         currentState = MOVING;
@@ -342,7 +352,20 @@ private:
         );
     }
 
-    // Helper functions
+    float calculateTargetHeading() {
+        return atan2(
+            targetPosition.y - currentPosition.y,
+            targetPosition.x - currentPosition.x
+        ) * RAD_TO_DEG;
+    }
+
+    float calculateHeadingError() const {
+        float error = targetHeading - currentPosition.heading;
+        if (error > 180) error -= 360;
+        if (error < -180) error += 360;
+        return error;
+    }
+
     float smoothTransition(float current, float target, float maxChange) {
         float diff = target - current;
         if (abs(diff) > maxChange) {
@@ -401,18 +424,6 @@ private:
         pathMemoryIndex = 0;
     }
 
-    float calculateHeadingError() {
-        float targetHeading = atan2(
-            targetPosition.y - currentPosition.y,
-            targetPosition.x - currentPosition.x
-        ) * RAD_TO_DEG;
-        
-        float error = targetHeading - currentPosition.heading;
-        if (error > 180) error -= 360;
-        if (error < -180) error += 360;
-        return error;
-    }
-
     float calculateDistanceToTarget() const {
         float dx = targetPosition.x - currentPosition.x;
         float dy = targetPosition.y - currentPosition.y;
@@ -446,13 +457,28 @@ private:
     }
 
     void updateMetrics() {
-        // Update navigation metrics
-        // This could be expanded based on specific needs
+        // Basic metrics tracking
+        static unsigned long lastMetricsUpdate = 0;
+        unsigned long now = millis();
+        
+        if (now - lastMetricsUpdate >= 1000) { // Update every second
+            // Update distance traveled
+            float distance = calculateDistanceToTarget();
+            
+            // Update average speed
+            float avgSpeed = currentPosition.velocity;
+            
+            // Could log or store these metrics as needed
+            lastMetricsUpdate = now;
+        }
     }
 
     void handleError() {
         motors.stop();
         currentState = ERROR_STATE;
+        if (DEBUG_MODE) {
+            Serial.println(F("Navigation error detected"));
+        }
     }
 };
 
