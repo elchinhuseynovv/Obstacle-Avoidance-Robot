@@ -6,7 +6,9 @@
 
 // Object instances
 Motors motors;
-UltrasonicSensor sensor;
+UltrasonicSensor frontSensor;
+UltrasonicSensor leftSensor;
+UltrasonicSensor rightSensor;
 Display display;
 BatteryMonitor battery;
 Navigation* navigation;
@@ -127,7 +129,9 @@ bool initializeComponents() {
     bool success = true;
     
     success &= motors.init();
-    success &= sensor.init();
+    success &= frontSensor.init(TRIG_FRONT, ECHO_FRONT);
+    success &= leftSensor.init(TRIG_LEFT, ECHO_LEFT);
+    success &= rightSensor.init(TRIG_RIGHT, ECHO_RIGHT);
     success &= display.init();
     success &= battery.init();
     success &= lineFollower.init();
@@ -136,7 +140,7 @@ bool initializeComponents() {
     rightEncoder.init();
     leftEncoder.init();
     
-    navigation = new Navigation(motors, sensor);
+    navigation = new Navigation(motors, frontSensor, leftSensor, rightSensor, imu);
     systemMonitor = new SystemMonitor(battery, motors, imu);
     errorHandler = new ErrorHandler(display);
     
@@ -191,7 +195,7 @@ void handleNormalOperation() {
     // Update display with current status
     NavigationMode currentMode = navigation->getMode();
     display.updateStatus(
-        sensor.getDistance(),
+        frontSensor.getDistance(),
         motors.getCurrentSpeed(),
         navigationModeStrings[currentMode]
     );
@@ -314,7 +318,7 @@ void initializeMetrics() {
 
 void processSensorData() {
     static unsigned long lastObstacleTime = 0;
-    int distance = sensor.getDistance();
+    int distance = frontSensor.getDistance();
     
     if (distance < DANGER_DISTANCE && millis() - lastObstacleTime > OBSTACLE_TIMEOUT) {
         metrics.obstaclesAvoided++;
