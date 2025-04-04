@@ -4,19 +4,29 @@
 #include <Wire.h>
 #include "config.h"
 
+// Define conversion constants if not already defined
+#ifndef RAD_TO_DEG
+#define RAD_TO_DEG 57.295779513082320876798154814105
+#endif
+
+#ifndef DEG_TO_RAD
+#define DEG_TO_RAD 0.017453292519943295769236907684886
+#endif
+
 class IMU {
 private:
     const int MPU_ADDR = 0x68;
     float accelX, accelY, accelZ;
     float gyroX, gyroY, gyroZ;
     float roll, pitch, yaw;
+    float temperature;
     unsigned long lastUpdate;
 
 public:
     IMU() : accelX(0), accelY(0), accelZ(0),
             gyroX(0), gyroY(0), gyroZ(0),
             roll(0), pitch(0), yaw(0),
-            lastUpdate(0) {}
+            temperature(0), lastUpdate(0) {}
 
     void init() {
         Wire.begin();
@@ -51,8 +61,9 @@ public:
         accelY = (Wire.read() << 8 | Wire.read()) / 4096.0;
         accelZ = (Wire.read() << 8 | Wire.read()) / 4096.0;
 
-        // Skip temperature
-        Wire.read(); Wire.read();
+        // Read temperature
+        int16_t tempRaw = Wire.read() << 8 | Wire.read();
+        temperature = tempRaw / 340.0 + 36.53; // MPU-6050 temperature formula
 
         // Read gyroscope data
         gyroX = (Wire.read() << 8 | Wire.read()) / 32.8;
@@ -68,6 +79,7 @@ public:
     float getRoll() { return roll; }
     float getPitch() { return pitch; }
     float getYaw() { return yaw; }
+    float getTemperature() { return temperature; }
     
     void getAcceleration(float& x, float& y, float& z) {
         x = accelX;
@@ -81,20 +93,6 @@ public:
         z = gyroZ;
     }
 
-private:
-    void calculateOrientation() {
-        // Simple complementary filter
-        float dt = (millis() - lastUpdate) / 1000.0;
-        
-        // Calculate pitch and roll from accelerometer
-        float accelRoll = atan2(accelY, accelZ) * RAD_TO_DEG;
-        float accelPitch = atan2(-accelX, sqrt(accelY * accelY + accelZ * accelZ)) * RAD_TO_DEG;
-        
-        // Integrate gyroscope data
-        roll = 0.96 * (roll + gyroX * dt) + 0.04 * accelRoll;
-        pitch = 0.96 * (pitch + gyroY * dt) + 0.04 * accelPitch;
-        yaw += gyroZ * dt;
-    }
-};
+
 
 #endif
