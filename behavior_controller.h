@@ -6,6 +6,7 @@
 #include "sensor_manager.h"
 #include "navigation.h"
 #include "imu.h"
+#include "battery.h"
 
 class BehaviorController {
 private:
@@ -13,6 +14,7 @@ private:
     SensorManager& sensors;
     Navigation& navigation;
     IMU& imu;
+    BatteryMonitor& battery;  // Added battery reference
     
     RobotState currentState;
     NavigationMode currentMode;
@@ -31,8 +33,8 @@ private:
     const unsigned long UPDATE_INTERVAL = 100; // 100ms between updates
 
 public:
-    BehaviorController(Motors& m, SensorManager& s, Navigation& n, IMU& i)
-        : motors(m), sensors(s), navigation(n), imu(i),
+    BehaviorController(Motors& m, SensorManager& s, Navigation& n, IMU& i, BatteryMonitor& b)
+        : motors(m), sensors(s), navigation(n), imu(i), battery(b),
           currentState(IDLE), currentMode(NORMAL), currentError(NO_ERROR),
           lastUpdate(0) {
         resetMetrics();
