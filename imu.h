@@ -93,6 +93,20 @@ public:
         z = gyroZ;
     }
 
-
+private:
+    void calculateOrientation() {
+        // Simple complementary filter
+        float dt = (millis() - lastUpdate) / 1000.0;
+        
+        // Calculate pitch and roll from accelerometer
+        float accelRoll = atan2(accelY, accelZ) * RAD_TO_DEG;
+        float accelPitch = atan2(-accelX, sqrt(accelY * accelY + accelZ * accelZ)) * RAD_TO_DEG;
+        
+        // Integrate gyroscope data
+        roll = 0.96 * (roll + gyroX * dt) + 0.04 * accelRoll;
+        pitch = 0.96 * (pitch + gyroY * dt) + 0.04 * accelPitch;
+        yaw += gyroZ * dt;
+    }
+};
 
 #endif
