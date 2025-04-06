@@ -195,3 +195,14 @@ private:
             }
         }
         
+        // Critical battery warning
+        if (isCriticalBattery() && !criticalBatteryWarning) {
+            criticalBatteryWarning = true;
+            warningCount++;
+            if (DEBUG_MODE) {
+                Serial.println(F("CRITICAL: Battery critically low!"));
+                Serial.print(F("Voltage: "));
+                Serial.println(voltage);
+            }
+        }
+        
