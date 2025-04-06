@@ -21,92 +21,118 @@ private:
     float roll, pitch, yaw;
     float temperature;
     unsigned long lastUpdate;
+    bool initialized;
+    
+    // Calibration offsets
+    float accelOffsetX, accelOffsetY, accelOffsetZ;
+    float gyroOffsetX, gyroOffsetY, gyroOffsetZ;
+    
+    // Filter coefficients
+    const float ALPHA = 0.96; // Complementary filter coefficient
+    const float BETA = 0.04;  // 1 - ALPHA
 
 public:
     IMU() : accelX(0), accelY(0), accelZ(0),
             gyroX(0), gyroY(0), gyroZ(0),
             roll(0), pitch(0), yaw(0),
-            temperature(0), lastUpdate(0) {}
+            temperature(0), lastUpdate(0),
+            initialized(false),
+            accelOffsetX(0), accelOffsetY(0), accelOffsetZ(0),
+            gyroOffsetX(0), gyroOffsetY(0), gyroOffsetZ(0) {}
 
-    void init() {
+    bool init() {
         Wire.begin();
+        
+        // Check if MPU is responding
+        Wire.beginTransmission(MPU_ADDR);
+        if (Wire.endTransmission() != 0) {
+            if (DEBUG_MODE) {
+                Serial.println(F("IMU initialization failed"));
+            }
+            return false;
+        }
+
+        // Wake up MPU-6050
         Wire.beginTransmission(MPU_ADDR);
         Wire.write(0x6B);  // PWR_MGMT_1 register
         Wire.write(0);     // Wake up MPU-6050
-        Wire.endTransmission(true);
+        if (Wire.endTransmission(true) != 0) return false;
 
-        // Configure Accelerometer
+        // Configure Accelerometer (±8g)
         Wire.beginTransmission(MPU_ADDR);
         Wire.write(0x1C);  // ACCEL_CONFIG register
         Wire.write(0x10);  // ±8g range
-        Wire.endTransmission(true);
+        if (Wire.endTransmission(true) != 0) return false;
 
-        // Configure Gyroscope
+        // Configure Gyroscope (±1000°/s)
         Wire.beginTransmission(MPU_ADDR);
         Wire.write(0x1B);  // GYRO_CONFIG register
         Wire.write(0x10);  // ±1000°/s range
-        Wire.endTransmission(true);
+        if (Wire.endTransmission(true) != 0) return false;
+
+        // Configure low pass filter
+        Wire.beginTransmission(MPU_ADDR);
+        Wire.write(0x1A);  // CONFIG register
+        Wire.write(0x03);  // Set digital low pass filter to ~43Hz
+        if (Wire.endTransmission(true) != 0) return false;
+
+        // Perform calibration
+        if (!calibrate()) {
+            if (DEBUG_MODE) {
+                Serial.println(F("IMU calibration failed"));
+            }
+            return false;
+        }
+
+        initialized = true;
+        if (DEBUG_MODE) {
+            Serial.println(F("IMU initialized successfully"));
+        }
+        return true;
     }
 
-    void update() {
-        if (millis() - lastUpdate < IMU_UPDATE_INTERVAL) return;
+    bool update() {
+        if (!initialized || (millis() - lastUpdate < IMU_UPDATE_INTERVAL)) {
+            return false;
+        }
 
         Wire.beginTransmission(MPU_ADDR);
         Wire.write(0x3B);  // Starting with register 0x3B (ACCEL_XOUT_H)
-        Wire.endTransmission(false);
-        Wire.requestFrom(MPU_ADDR, 14, true);  // Request 14 registers
+        if (Wire.endTransmission(false) != 0) return false;
+        
+        if (Wire.requestFrom(MPU_ADDR, 14, true) != 14) {
+            return false;
+        }
 
-        // Read accelerometer data
-        accelX = (Wire.read() << 8 | Wire.read()) / 4096.0;
-        accelY = (Wire.read() << 8 | Wire.read()) / 4096.0;
-        accelZ = (Wire.read() << 8 | Wire.read()) / 4096.0;
+        // Read and apply calibration to accelerometer data
+        accelX = ((Wire.read() << 8 | Wire.read()) / 4096.0) - accelOffsetX;
+        accelY = ((Wire.read() << 8 | Wire.read()) / 4096.0) - accelOffsetY;
+        accelZ = ((Wire.read() << 8 | Wire.read()) / 4096.0) - accelOffsetZ;
 
         // Read temperature
         int16_t tempRaw = Wire.read() << 8 | Wire.read();
-        temperature = tempRaw / 340.0 + 36.53; // MPU-6050 temperature formula
+        temperature = tempRaw / 340.0 + 36.53;
 
-        // Read gyroscope data
-        gyroX = (Wire.read() << 8 | Wire.read()) / 32.8;
-        gyroY = (Wire.read() << 8 | Wire.read()) / 32.8;
-        gyroZ = (Wire.read() << 8 | Wire.read()) / 32.8;
+        // Read and apply calibration to gyroscope data
+        gyroX = ((Wire.read() << 8 | Wire.read()) / 32.8) - gyroOffsetX;
+        gyroY = ((Wire.read() << 8 | Wire.read()) / 32.8) - gyroOffsetY;
+        gyroZ = ((Wire.read() << 8 | Wire.read()) / 32.8) - gyroOffsetZ;
 
-        // Calculate orientation
+        // Calculate orientation with improved filtering
         calculateOrientation();
         
         lastUpdate = millis();
+        return true;
     }
 
-    float getRoll() { return roll; }
-    float getPitch() { return pitch; }
-    float getYaw() { return yaw; }
-    float getTemperature() { return temperature; }
+    float getRoll() const { return roll; }
+    float getPitch() const { return pitch; }
+    float getYaw() const { return yaw; }
+    float getTemperature() const { return temperature; }
     
-    void getAcceleration(float& x, float& y, float& z) {
+    void getAcceleration(float& x, float& y, float& z) const {
         x = accelX;
         y = accelY;
         z = accelZ;
     }
     
-    void getGyroscope(float& x, float& y, float& z) {
-        x = gyroX;
-        y = gyroY;
-        z = gyroZ;
-    }
-
-private:
-    void calculateOrientation() {
-        // Simple complementary filter
-        float dt = (millis() - lastUpdate) / 1000.0;
-        
-        // Calculate pitch and roll from accelerometer
-        float accelRoll = atan2(accelY, accelZ) * RAD_TO_DEG;
-        float accelPitch = atan2(-accelX, sqrt(accelY * accelY + accelZ * accelZ)) * RAD_TO_DEG;
-        
-        // Integrate gyroscope data
-        roll = 0.96 * (roll + gyroX * dt) + 0.04 * accelRoll;
-        pitch = 0.96 * (pitch + gyroY * dt) + 0.04 * accelPitch;
-        yaw += gyroZ * dt;
-    }
-};
-
-#endif
