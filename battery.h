@@ -156,3 +156,42 @@ private:
         
         return count > 0 ? sum / count : instantVoltage;
     }
+
+    void updateBatteryMetrics() {
+        // Update voltage extremes
+        if (voltage < lowestVoltage) lowestVoltage = voltage;
+        if (voltage > highestVoltage) highestVoltage = voltage;
+        
+        // Calculate voltage drop rate (V/hour)
+        unsigned long runtime = (millis() - monitoringStartTime) / 1000; // seconds
+        if (runtime > 0) {
+            voltageDropRate = (initialVoltage - voltage) / (runtime / 3600.0);
+        }
+    }
+
+    void checkBatteryStatus() {
+        unsigned long now = millis();
+        
+        // Check for sudden voltage drops
+        float voltageDrop = previousVoltage - voltage;
+        if (voltageDrop > 0.5) { // Sudden 0.5V drop
+            if (DEBUG_MODE) {
+                Serial.println(F("WARNING: Sudden voltage drop detected!"));
+            }
+            warningCount++;
+        }
+        
+        // Low battery warning
+        if (isLowBattery() && !lowBatteryWarning) {
+            lowBatteryWarning = true;
+            warningCount++;
+            if (now - lastWarning >= WARNING_INTERVAL) {
+                if (DEBUG_MODE) {
+                    Serial.println(F("WARNING: Low battery!"));
+                    Serial.print(F("Voltage: "));
+                    Serial.println(voltage);
+                }
+                lastWarning = now;
+            }
+        }
+        
