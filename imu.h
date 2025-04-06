@@ -195,3 +195,14 @@ private:
 
             delay(10);
         }
+
+        // Calculate offsets
+        accelOffsetX = sumAccelX / numSamples;
+        accelOffsetY = sumAccelY / numSamples;
+        accelOffsetZ = (sumAccelZ / numSamples) - 1.0; // Account for gravity
+        gyroOffsetX = sumGyroX / numSamples;
+        gyroOffsetY = sumGyroY / numSamples;
+        gyroOffsetZ = sumGyroZ / numSamples;
+
+        return true;
+    }
