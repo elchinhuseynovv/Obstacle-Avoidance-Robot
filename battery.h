@@ -206,3 +206,14 @@ private:
             }
         }
         
+        // Reset warnings if voltage recovers
+        if (voltage > LOW_BATTERY_THRESHOLD + 0.5) {
+            lowBatteryWarning = false;
+        }
+        if (voltage > CRITICAL_BATTERY_THRESHOLD + 0.5) {
+            criticalBatteryWarning = false;
+        }
+    }
+};
+
+#endif
