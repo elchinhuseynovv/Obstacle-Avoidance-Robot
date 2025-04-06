@@ -88,3 +88,32 @@ public:
         bool isLow;
         bool isCritical;
     };
+
+    BatteryStatus getStatus() const {
+        return {
+            voltage,
+            voltageDropRate,
+            lowestVoltage,
+            highestVoltage,
+            (millis() - monitoringStartTime) / 1000, // Convert to seconds
+            warningCount,
+            isLowBattery(),
+            isCriticalBattery()
+        };
+    }
+
+    bool performSelfTest() {
+        float testVoltage = readVoltage();
+        
+        // Check if voltage reading is within possible range
+        if (testVoltage < 0.0 || testVoltage > 15.0) {
+            return false;
+        }
+        
+        // Check if ADC is working by taking multiple readings
+        float readings[3];
+        for (int i = 0; i < 3; i++) {
+            readings[i] = readVoltage();
+            delay(10);
+        }
+        
