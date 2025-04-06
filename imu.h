@@ -136,3 +136,32 @@ public:
         z = accelZ;
     }
     
+    void getGyroscope(float& x, float& y, float& z) const {
+        x = gyroX;
+        y = gyroY;
+        z = gyroZ;
+    }
+
+    bool isInitialized() const {
+        return initialized;
+    }
+
+    // Self-test function
+    bool selfTest() {
+        if (!initialized) return false;
+
+        // Check if we can read from the sensor
+        Wire.beginTransmission(MPU_ADDR);
+        Wire.write(0x75);  // WHO_AM_I register
+        if (Wire.endTransmission(false) != 0) return false;
+        
+        Wire.requestFrom(MPU_ADDR, 1, true);
+        if (Wire.read() != 0x68) return false;  // MPU-6050 should return 0x68
+
+        // Check if readings are within reasonable ranges
+        update();
+        float accelMagnitude = sqrt(accelX*accelX + accelY*accelY + accelZ*accelZ);
+        if (accelMagnitude < 0.8 || accelMagnitude > 1.2) return false;  // Should be close to 1g
+
+        return true;
+    }
