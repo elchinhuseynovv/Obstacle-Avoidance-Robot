@@ -165,3 +165,33 @@ public:
 
         return true;
     }
+
+private:
+    bool calibrate() {
+        const int numSamples = 100;
+        float sumAccelX = 0, sumAccelY = 0, sumAccelZ = 0;
+        float sumGyroX = 0, sumGyroY = 0, sumGyroZ = 0;
+
+        // Collect samples
+        for (int i = 0; i < numSamples; i++) {
+            Wire.beginTransmission(MPU_ADDR);
+            Wire.write(0x3B);
+            if (Wire.endTransmission(false) != 0) return false;
+            
+            if (Wire.requestFrom(MPU_ADDR, 14, true) != 14) return false;
+
+            // Read accelerometer data
+            sumAccelX += (Wire.read() << 8 | Wire.read()) / 4096.0;
+            sumAccelY += (Wire.read() << 8 | Wire.read()) / 4096.0;
+            sumAccelZ += (Wire.read() << 8 | Wire.read()) / 4096.0;
+
+            // Skip temperature
+            Wire.read(); Wire.read();
+
+            // Read gyroscope data
+            sumGyroX += (Wire.read() << 8 | Wire.read()) / 32.8;
+            sumGyroY += (Wire.read() << 8 | Wire.read()) / 32.8;
+            sumGyroZ += (Wire.read() << 8 | Wire.read()) / 32.8;
+
+            delay(10);
+        }
