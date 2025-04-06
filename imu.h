@@ -206,3 +206,27 @@ private:
 
         return true;
     }
+
+    void calculateOrientation() {
+        float dt = (millis() - lastUpdate) / 1000.0;
+        
+        // Calculate pitch and roll from accelerometer
+        float accelRoll = atan2(accelY, accelZ) * RAD_TO_DEG;
+        float accelPitch = atan2(-accelX, sqrt(accelY * accelY + accelZ * accelZ)) * RAD_TO_DEG;
+        
+        // Apply complementary filter with improved coefficients
+        roll = ALPHA * (roll + gyroX * dt) + BETA * accelRoll;
+        pitch = ALPHA * (pitch + gyroY * dt) + BETA * accelPitch;
+        
+        // Normalize yaw to 0-360 degrees
+        yaw += gyroZ * dt;
+        while (yaw >= 360) yaw -= 360;
+        while (yaw < 0) yaw += 360;
+        
+        // Constrain roll and pitch to prevent gimbal lock
+        roll = constrain(roll, -90, 90);
+        pitch = constrain(pitch, -90, 90);
+    }
+};
+
+#endif
