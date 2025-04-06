@@ -117,3 +117,42 @@ public:
             delay(10);
         }
         
+        // Check for stuck ADC (all readings identical)
+        if (readings[0] == readings[1] && readings[1] == readings[2]) {
+            return false;
+        }
+        
+        return true;
+    }
+
+private:
+    float readVoltage() {
+        // Take multiple readings for accuracy
+        float sum = 0.0;
+        const int samples = 5;
+        
+        for (int i = 0; i < samples; i++) {
+            int rawValue = analogRead(BATTERY_PIN);
+            float reading = (rawValue * VOLTAGE_REFERENCE) / 1023.0 * VOLTAGE_DIVIDER;
+            sum += reading;
+            delay(1); // Short delay between readings
+        }
+        
+        float instantVoltage = sum / samples;
+        
+        // Update moving average
+        voltageReadings[readingIndex] = instantVoltage;
+        readingIndex = (readingIndex + 1) % VOLTAGE_SAMPLES;
+        if (readingIndex == 0) {
+            bufferFilled = true;
+        }
+        
+        // Calculate moving average
+        sum = 0.0;
+        int count = bufferFilled ? VOLTAGE_SAMPLES : readingIndex;
+        for (int i = 0; i < count; i++) {
+            sum += voltageReadings[i];
+        }
+        
+        return count > 0 ? sum / count : instantVoltage;
+    }
