@@ -65,3 +65,26 @@ public:
         }
         return voltage;
     }
+
+    bool isLowBattery() const {
+        return voltage < LOW_BATTERY_THRESHOLD;
+    }
+
+    bool isCriticalBattery() const {
+        return voltage < CRITICAL_BATTERY_THRESHOLD;
+    }
+
+    float getVoltageDropRate() const {
+        return voltageDropRate;
+    }
+
+    struct BatteryStatus {
+        float currentVoltage;
+        float dropRate;
+        float lowestVoltage;
+        float highestVoltage;
+        unsigned long uptime;
+        int warningCount;
+        bool isLow;
+        bool isCritical;
+    };
